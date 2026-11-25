@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pixel PC Quest</title>
+<style>
+:root{--bg:#eef0f6;--panel:#fff;--ink:#1b1b2f;--mute:#5b5f77;--line:#c9cce0;--acc:#3a3fbf;--accink:#fff;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14142a;--panel:#1f2040;--ink:#eef0ff;--mute:#a4a8cc;--line:#383a70;--acc:#f5c242;--accink:#1b1b2f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14142a;--panel:#1f2040;--ink:#eef0ff;--mute:#a4a8cc;--line:#383a70;--acc:#f5c242;--accink:#1b1b2f;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Courier New",monospace}
+main{max-width:520px;margin:0 auto;padding:14px 14px 36px}
+h1{font:700 24px/1 "Courier New",monospace;margin:4px 0 10px;letter-spacing:1px}
+.hud{display:flex;justify-content:space-between;font-weight:700;margin-bottom:8px}
+.box{background:var(--panel);border:3px solid var(--ink);padding:10px;margin:8px 0}
+#q{font-weight:700;min-height:48px}
+canvas{display:block;width:100%;image-rendering:pixelated;border:3px solid var(--ink);background:#1e3d35}
+#msg{min-height:68px}
+#die{color:var(--mute);font-size:14px}
+.pad{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.dp{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,56px);gap:4px}
+button{font:700 20px "Courier New",monospace;background:var(--acc);color:var(--accink);border:3px solid var(--ink);cursor:pointer;touch-action:manipulation}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.dp button:nth-child(1){grid-area:1/2}.dp button:nth-child(2){grid-area:2/1}.dp button:nth-child(3){grid-area:2/3}.dp button:nth-child(4){grid-area:3/2}
+#a{width:92px;height:92px;border-radius:50%;font-size:28px}
+table{width:100%;border-collapse:collapse;font-size:14px}td{border-top:1px solid var(--line);padding:6px 4px;vertical-align:top}td:first-child{font-weight:700;white-space:nowrap;padding-right:8px}
+small{color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+<h1>PIXEL PC QUEST</h1>
+<div class="hud"><span id="r">Ronde -</span><span id="l">❤❤❤</span><span id="s">Skor 0</span></div>
+<div class="box" id="q">Tekan A untuk mulai.</div>
+<canvas id="c" width="160" height="100" aria-label="Peta permainan"></canvas>
+<div class="box" id="msg">Gerakkan karakter ke perangkat yang tepat, lalu tekan A.</div>
+<div id="die">🎲 RNG: letak perangkat, urutan soal, dan kotak ? diacak.</div>
+<div class="pad">
+<div class="dp"><button onpointerdown="act('u')" aria-label="Atas">▲</button><button onpointerdown="act('l')" aria-label="Kiri">◀</button><button onpointerdown="act('r')" aria-label="Kanan">▶</button><button onpointerdown="act('d')" aria-label="Bawah">▼</button></div>
+<button id="a" onpointerdown="act('a')" aria-label="Tombol A">A</button>
+</div>
+<div class="box" id="ov"></div>
+<small>Kontrol: D-pad layar, panah/WASD + Enter/Spasi/Z, atau controller (gamepad) — tekan tombol apa saja pada controller agar terdeteksi.</small>
+</main>
+<script>
+const $=s=>document.querySelector(s),C=$('#c'),X=C.getContext('2d');
+const PAL={k:'#1b1b2f',w:'#fff',g:'#9aa5b1',b:'#3a7bd5',r:'#e5484d',y:'#f5c242',n:'#3fb27f',p:'#f2c9a0'};
+const SP={
+kb:['........','kkkkkkkk','kgkgkgkk','kkkkkkkk','kgkgkgkk','kkkkkkkk','kgggggkk','kkkkkkkk'],
+ms:['..kkkk..','.kwwkwk.','.kwwkwk.','.kkkkkk.','.kwwwwk.','.kwwwwk.','.kwwwwk.','..kkkk..'],
+mon:['kkkkkkkk','kbbbbbbk','kbwbbbbk','kbbbbbbk','kbbbbbbk','kkkkkkkk','...kk...','..kkkk..'],
+cpu:['kkkkkkkk','kggggnkk','kggggggk','kkkkkkkk','kggggggk','kggggrgk','kggggggk','kkkkkkkk'],
+ram:['........','kkkkkkkk','knnknnnk','knnknnnk','kkkkkkkk','.y.y.y.y','.y.y.y.y','........'],
+ssd:['........','kkkkkkkk','kggggggk','kgwwwwgk','kggggggk','kggggrgk','kkkkkkkk','........'],
+spk:['.kkkkkk.','kggwwggk','kgwkkwgk','kgwkkwgk','kggwwggk','kggggggk','kggkkggk','.kkkkkk.'],
+prn:['..kkkk..','..kwwk..','kkkkkkkk','kggggrgk','kkkkkkkk','.kwwwwk.','.kwkkwk.','.kwwwwk.'],
+cam:['..kkkk..','.kkwwkk.','.kwkkwk.','.kwkbwk.','.kkwwkk.','..kkkk..','...kk...','..kkkk..'],
+mic:['..kkkk..','.kggggk.','.kgkkgk.','.kggggk.','k.kkkk.k','k..kk..k','.kkkkkk.','...kk...'],
+pl:['..kkkk..','.kppppk.','.kpkkpk.','..kppk..','.krrrrk.','kkrrrrkk','..kkkk..','..k..k..']};
+const D={
+kb:['Keyboard','INPUT','Keyboard memasukkan huruf dan angka ke komputer.'],
+ms:['Mouse','INPUT','Mouse menggerakkan kursor dan mengeklik objek.'],
+mon:['Monitor','OUTPUT','Monitor menampilkan gambar dan tulisan.'],
+cpu:['CPU','PROSES','CPU adalah “otak” yang memproses instruksi.'],
+ram:['RAM','MEMORI','RAM menyimpan data sementara saat komputer menyala.'],
+ssd:['SSD/Harddisk','PENYIMPANAN','SSD/Harddisk menyimpan file dan program secara permanen.'],
+spk:['Speaker','OUTPUT','Speaker mengeluarkan suara.'],
+prn:['Printer','OUTPUT','Printer mencetak dokumen ke kertas.'],
+cam:['Webcam','INPUT','Webcam merekam gambar dan video.'],
+mic:['Mikrofon','INPUT','Mikrofon merekam suara.']};
+const Q=[['Mana perangkat untuk mengetik huruf dan angka?','kb'],['Mana perangkat untuk menggerakkan kursor dan mengeklik?','ms'],['Mana perangkat yang menampilkan gambar dan tulisan?','mon'],['Mana “otak” komputer yang memproses instruksi?','cpu'],['Mana yang menyimpan data sementara saat komputer menyala?','ram'],['Mana yang menyimpan file dan program secara permanen?','ssd'],['Mana perangkat yang mengeluarkan suara musik?','spk'],['Mana perangkat yang mencetak dokumen ke kertas?','prn'],['Mana perangkat untuk video call (merekam gambar)?','cam'],['Mana perangkat untuk merekam suara kita?','mic']];
+const G={m:'start',r:0,l:3,s:0,qs:[],it:[],bx:[],px:0,py:0,tg:'',tm:0};
+const sh=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+function spr(id,x,y){SP[id].forEach((row,j)=>[...row].forEach((c,i)=>{if(c!='.'){X.fillStyle=PAL[c];X.fillRect(x+i*2,y+j*2,2,2)}}))}
+function draw(){
+ for(let j=0;j<5;j++)for(let i=0;i<8;i++){X.fillStyle=(i+j)%2?'#23473e':'#1e3d35';X.fillRect(i*20,j*20,20,20)}
+ G.bx.forEach(b=>{X.fillStyle='#f5c242';X.fillRect(b.x*20+3,b.y*20+3,14,14);X.fillStyle='#1b1b2f';X.font='bold 12px monospace';X.fillText('?',b.x*20+7,b.y*20+15)});
+ G.it.forEach(o=>spr(o.id,o.x*20+2,o.y*20+2));
+ spr('pl',G.px*20+2,G.py*20+2);
+ X.strokeStyle='#fff';X.strokeRect(G.px*20+.5,G.py*20+.5,19,19);
+}
+function hud(){$('#r').textContent='Ronde '+(G.m=='start'?'-':Math.min(G.r+1,8)+'/8');$('#l').textContent='❤'.repeat(Math.max(G.l,0))||'☠';$('#s').textContent='Skor '+G.s}
+function say(t){$('#msg').textContent=t}
+const at=(a,x,y)=>a.find(o=>o.x==x&&o.y==y);
+function look(){const o=at(G.it,G.px,G.py);say(o?'Kamu di atas: '+D[o.id][0]+' ('+D[o.id][1]+'). Tekan A untuk memilih.':'Cari perangkat yang tepat. Kotak ? berisi kejutan acak!')}
+function newRound(){
+ const q=G.qs[G.r];G.tg=q[1];$('#q').textContent=q[0];
+ const ids=[G.tg,...sh(Object.keys(D).filter(k=>k!=G.tg)).slice(0,5)];
+ const c=sh([...Array(40).keys()]).map(n=>({x:n%8,y:Math.floor(n/8)}));
+ G.it=ids.map((id,i)=>({id,x:c[i].x,y:c[i].y}));
+ G.bx=[c[6],c[7]];G.px=c[8].x;G.py=c[8].y;G.m='play';hud();draw();look();
+}
+function start(){Object.assign(G,{r:0,l:3,s:0,qs:sh(Q).slice(0,8)});$('#ov').hidden=true;newRound()}
+function next(){clearTimeout(G.tm);G.r++;G.r>=8?end():newRound()}
+function end(){
+ G.m='end';hud();draw();
+ const t=G.l<=0?'Baterai habis! Coba lagi.':'Misi selesai!';
+ const k=G.s>=170?'Teknisi Hebat':G.s>=110?'Teknisi Handal':'Teknisi Pemula';
+ $('#q').textContent=t+' Skor akhir '+G.s+' — '+k;say('Tekan A untuk main lagi.');
+ const ct=[['Dekomposisi','Setiap ronde dipecah: baca soal → jelajah → pilih → cek.'],['Pengenalan pola','Perangkat dikelompokkan: INPUT, PROSES, OUTPUT, MEMORI, PENYIMPANAN.'],['Abstraksi','Perangkat digambar sederhana 8×8 piksel; hanya ciri pentingnya.'],['Algoritma','Ulangi 8 ronde: acak → jelajah → pilih → nilai benar/salah → skor/nyawa.'],['RNG','Letak perangkat, urutan soal, dan hadiah kotak ? diacak tiap main.']];
+ $('#ov').hidden=false;$('#ov').innerHTML='<b>Berpikir komputasional di game ini</b><table>'+ct.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('')+'</table>';
+}
+function box(){
+ const b=at(G.bx,G.px,G.py);if(!b)return false;
+ G.bx=G.bx.filter(o=>o!==b);const d=1+Math.floor(Math.random()*100);let t;
+ if(d<=40){G.s+=15;t='Bonus data! +15 poin.'}
+ else if(d<=60){G.l=Math.min(3,G.l+1);t='Baterai cadangan! Nyawa +1 (maks 3).'}
+ else if(d<=85){G.s=Math.max(0,G.s-10);t='Virus! Skor −10.'}
+ else{const w=G.it.filter(o=>o.id!=G.tg);if(w.length){G.it=G.it.filter(o=>o!==w[0]);t='Antivirus! Satu perangkat yang salah dihapus.'}else t='Kotak kosong.'}
+ $('#die').textContent='🎲 Dadu RNG: '+d+' (1–100)';say(t);hud();return true;
+}
+function answer(){
+ const o=at(G.it,G.px,G.py);if(!o){say('Berdirilah di atas sebuah perangkat dulu.');return}
+ if(o.id==G.tg){G.s+=20;G.m='fb';say('Benar! +20. '+D[o.id][2]);hud();G.tm=setTimeout(next,2200)}
+ else{G.l--;G.it=G.it.filter(x=>x!==o);say('Salah! Itu '+D[o.id][0]+'. '+D[o.id][2]+' Nyawa −1.');hud();if(G.l<=0)end()}
+ draw();
+}
+function act(k){
+ if(G.m=='start'||G.m=='end'){if(k=='a')start();return}
+ if(G.m=='fb'){if(k=='a')next();return}
+ if(k=='a'){answer();return}
+ const d={l:[-1,0],r:[1,0],u:[0,-1],d:[0,1]}[k];
+ G.px=Math.max(0,Math.min(7,G.px+d[0]));G.py=Math.max(0,Math.min(4,G.py+d[1]));
+ if(!box())look();draw();
+}
+const K={ArrowLeft:'l',a:'l',ArrowRight:'r',d:'r',ArrowUp:'u',w:'u',ArrowDown:'d',s:'d',Enter:'a',' ':'a',z:'a'};
+addEventListener('keydown',e=>{const k=K[e.key];if(k){e.preventDefault();act(k)}});
+addEventListener('gamepadconnected',()=>{$('#die').textContent='🎮 Controller terhubung!'});
+let pc=0,pa=false;
+function poll(t){
+ const gp=[...(navigator.getGamepads?navigator.getGamepads():[])].find(Boolean);
+ if(gp){const b=i=>gp.buttons[i]&&gp.buttons[i].pressed;let d=null;
+  if(b(14)||gp.axes[0]<-.5)d='l';else if(b(15)||gp.axes[0]>.5)d='r';else if(b(12)||gp.axes[1]<-.5)d='u';else if(b(13)||gp.axes[1]>.5)d='d';
+  if(d&&t-pc>170){pc=t;act(d)}
+  const a=b(0)||b(9);if(a&&!pa)act('a');pa=a}
+ requestAnimationFrame(poll);
+}
+requestAnimationFrame(poll);
+hud();draw();$('#ov').hidden=true;
+</script>
+</body>
+</html>
